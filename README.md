@@ -1,60 +1,73 @@
-# Traefik Dynamic Reverse Proxy (devops-traefik)
+# ?? Traefik Edge Router (`devops-traefik`)
 
-## Overview
-This repository provides a production-ready configuration for **Traefik v3**, acting as a dynamic edge router and reverse proxy for containerized workloads.
+## 1. Project Purpose
+Provide a dynamic, auto-discovering reverse proxy that terminates TLS securely and applies global security middlewares to all containerized traffic.
 
-## Architecture & Traffic Flow
+## 2. Problem Being Solved
+Managing Nginx configuration files manually for dozens of microservices is error-prone and requires proxy reloads, causing dropped connections. 
 
-`mermaid
-graph TD
-    Client[Client Request] -->|Port 80/443| Traefik[Traefik Proxy]
-    
-    subgraph Traefik Middlewares
-        Traefik -->|HTTP to HTTPS Redirect| TLS[TLS Termination]
-        TLS -->|Rate Limiting| Rate[RateLimit Middleware]
-        Rate -->|Security Headers| Headers[Security Headers Middleware]
-        Headers -->|BasicAuth| Auth[Dashboard BasicAuth]
-    end
-    
-    subgraph Container Workloads
-        Headers --> App1[App Container 1]
-        Headers --> App2[App Container 2]
-    end
-`
+## 3. Architecture Diagram
+```mermaid
+flowchart TB
+    Client -->|HTTPS| Traefik
+    Traefik -->|Middleware: RateLimit| Router
+    Router -->|Docker Provider| ContainerA
+    Router -->|Docker Provider| ContainerB
+```
 
-## Implementation Features
+## 4. Technology Stack
+- Traefik v3
+- Let's Encrypt (ACME)
+- Docker Compose
 
-1. **Dynamic Docker Provider:** Automatically discovers new containers via Docker labels without requiring a proxy restart or config reload.
-2. **Automated TLS (Let's Encrypt):** HTTP-01 challenge configured to automatically fetch and renew SSL certificates for newly spun-up containers.
-3. **Global HTTP to HTTPS Redirection:** Enforces secure connections for all incoming traffic.
-4. **Security Middlewares:** 
-   - Strict-Transport-Security (HSTS)
-   - X-Content-Type-Options
-   - X-Frame-Options
-   - Rate limiting to protect against brute-force attacks.
-5. **Dashboard Protection:** Traefik's internal management dashboard is exposed but protected by Basic Authentication middleware.
+## 5. Features
+- Zero-downtime dynamic routing via Docker labels.
+- Automated Let's Encrypt certificate lifecycle.
+- Global HTTP to HTTPS redirection.
+- Built-in security and rate-limiting middlewares.
 
-## Repository Structure
-- \docker-compose.yml\: The main orchestration file spinning up the Traefik daemon.
-- \	raefik.yml\: Static configuration (entrypoints, providers, certificate resolvers).
-- \dynamic.yml\: Dynamic configuration for globally applied middlewares.
-- \cme.json\: (Ignored in Git) The persistent storage file for SSL certificates.
+## 6. Repository Structure
+- `docker-compose.yml`: Proxy deployment.
+- `traefik.yml`: Static configuration.
+- `dynamic.yml`: Middleware definitions.
+- `ADR/`: Architecture decisions.
 
-## Deployment
+## 7. Quick Start
+`docker compose up -d`
 
-1. Create a secure password for the dashboard:
-   \\\ash
-   htpasswd -nb admin secure_password | sed -e s/\\$/\\$\\$/g > .htpasswd
-   \\\
-2. Touch the ACME certificate file and secure it:
-   \\\ash
-   touch acme.json && chmod 600 acme.json
-   \\\
-3. Deploy the proxy:
-   \\\ash
-   docker compose up -d
-   \\\
+## 8. Configuration
+Modify `traefik.yml` to set the Let's Encrypt email address.
 
-## Security
-- Traefik accesses the Docker socket as read-only (/var/run/docker.sock:ro).
-- Certificates are backed up using the architecture defined in the \devops-dokploy\ / \devops-backup-recovery\ phases.
+## 9. Testing
+Deploy a sample whoami container with Traefik labels to verify routing and TLS termination.
+
+## 10. Security
+See [SECURITY.md](SECURITY.md) for Docker socket risks.
+
+## 11. Observability
+Traefik exposes an internal dashboard (`api@internal`) protected by BasicAuth. Metrics can be scraped by Prometheus via the `/metrics` endpoint.
+
+## 12. Failure Scenarios
+If Traefik crashes, all ingress traffic drops. Docker's `restart: always` handles automatic recovery.
+
+## 13. Performance
+Traefik is written in Go and can handle tens of thousands of requests per second.
+
+## 14. Deployment
+Deployed as a standalone orchestrator on the host machine.
+
+## 15. Rollback
+Version pinned to `v3.0`. Rollback involves modifying the tag and running `docker compose up -d`.
+
+## 16. Disaster Recovery
+See [DISASTER_RECOVERY.md](DISASTER_RECOVERY.md).
+
+## 17. Design Decisions
+- [ADR-001: TLS Termination](ADR/001-tls-termination.md)
+- [ADR-002: Dynamic Configuration](ADR/002-dynamic-config.md)
+
+## 18. Limitations
+Not clustered. In a multi-node environment, Traefik must be deployed in high-availability mode utilizing a KV store (Consul/etcd) for certificate synchronization.
+
+## 19. Future Improvements
+Implement CrowdSec bouncer middleware for dynamic IP banning.
