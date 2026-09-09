@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./dynamic.yml:/etc/traefik/dynamic.yml:ro
+      - ./acme.json:/acme.json
+    networks:
+      - proxy
+    labels:
+      # Enable Traefik Dashboard
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(\	raefik.example.com\)"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.middlewares=auth"
+      # BasicAuth Middleware definition
+      - "traefik.http.middlewares.auth.basicauth.users=admin:\$\\$\\$\/"
+
+networks:
+  proxy:
+    name: proxy
+    driver: bridge
